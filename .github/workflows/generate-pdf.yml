@@ -1,0 +1,69 @@
+name: Generate PDF from Markdown
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  convert_to_pdf:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install mdpdf
+        run: npm install -g mdpdf
+      
+      - name: Combine Markdown files
+        run: |
+          # Create output directory
+          mkdir -p pdfs
+          # Create a temporary file for combined content
+          echo "# CPU Architecture and Principles" > combined.md
+          echo "" >> combined.md
+          # Add table of contents
+          cat toc.md >> combined.md
+          echo "" >> combined.md
+          # Add all chapters in numerical order
+          for i in {1..10}; do
+            if [ -f "chapters/chapter-$i.md" ]; then
+              echo "" >> combined.md
+              echo "---" >> combined.md
+              echo "" >> combined.md
+              cat "chapters/chapter-$i.md" >> combined.md
+            fi
+          done
+
+      - name: Convert to PDF
+        run: |
+          # Generate PDF
+          mdpdf combined.md
+          # Move PDF to pdfs directory
+          mv combined.pdf pdfs/cpu-book.pdf
+          # Check if PDF was created
+          ls -la pdfs/
+          if [ ! -f pdfs/cpu-book.pdf ]; then
+            echo "Error: PDF file was not created!"
+            exit 1
+          fi
+
+      - name: Upload PDF as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpu-book-pdf
+          path: pdfs/cpu-book.pdf
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: pdfs/cpu-book.pdf
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
